@@ -90,7 +90,7 @@ def load_raw_audio():
     return enoughs, notenoughs, empties, fullbackgrounds
 
 
-# Preprocess the audio to the correct format
+# Preprocess the audio to the correct format. trims to 10 sec.
 def preprocess_audio(filename):
     # Trim or pad audio segment to 10000ms
     padding = AudioSegment.silent(duration=10000)
@@ -104,7 +104,7 @@ def preprocess_audio(filename):
 
 def get_random_time_segment(segment_ms):
     """
-    Gets a random time segment of duration segment_ms in a 10,000 ms audio clip.
+    Gets a random time segment of duration segment_ms in a 5,000 ms audio clip.
     
     Arguments:
     segment_ms -- the duration of the audio clip in ms ("ms" stands for "milliseconds")
