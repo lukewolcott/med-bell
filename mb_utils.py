@@ -118,6 +118,36 @@ def preprocess_audio(filename):
     segment.export(filename, format='wav')
 
 
+def split_into_2_5sec_files(folder_name, idx):
+    filename = 'recorded_clips/{}/{:0>2}.wav'.format(folder_name, idx)
+    print(filename)
+    padding1 = AudioSegment.silent(duration=5000)
+    segment1 = AudioSegment.from_wav(filename)[:5000]
+    segment1 = padding1.overlay(segment1)
+    segment1 = segment1.set_frame_rate(44100)
+    
+    padding2 = AudioSegment.silent(duration=5000)
+    segment2 = AudioSegment.from_wav(filename)[5000:]
+    segment2 = padding2.overlay(segment2)
+    segment2 = segment2.set_frame_rate(44100)
+    
+    # Export as wav
+    segment1.export('recorded_clips/{}/{:0>2}.wav'.format(folder_name, idx), format='wav')
+    segment2.export('recorded_clips/{}/{:1>2}.wav'.format(folder_name, idx), format='wav')
+    
+
+def trim_to_5sec(folder_name, idx):
+    filename = 'recorded_clips/{}/{:0>2}.wav'.format(folder_name, idx)
+    print(filename)
+    padding1 = AudioSegment.silent(duration=5000)
+    segment1 = AudioSegment.from_wav(filename)[:5000]
+    segment1 = padding1.overlay(segment1)
+    segment1 = segment1.set_frame_rate(44100)
+        
+    # Export as wav
+    segment1.export('recorded_clips/{}/{:0>2}.wav'.format(folder_name, idx), format='wav')
+    
+
 def get_random_time_segment(segment_ms):
     """
     Gets a random time segment of duration segment_ms in a 5,000 ms audio clip.
@@ -277,9 +307,12 @@ def encode_and_oh_labels(labels):
     y_encoded = np.array([label_encoder_dict[l] for l in labels])
     return np_utils.to_categorical(y_encoded)
 
-# pads/trims runtime clip to 5 seconds, and saves as runtime_temp.wav
-def preprocess_runtime_clip(filename):
-    padding = AudioSegment.silent(duration=5000)
+# pads/trims runtime clip to 5 seconds, and saves as runtime_temp.wav. option for background file.
+def preprocess_runtime_clip(filename, background_filepath=None):
+    if background_filepath:
+        padding = AudioSegment.from_wav(background_filepath)[:5000]
+    else:
+        padding = padding = AudioSegment.silent(duration=5000)
     segment = AudioSegment.from_wav(filename)[:5000]
     segment = padding.overlay(segment)
     segment = segment.set_frame_rate(44100)
@@ -291,7 +324,7 @@ def preprocess_runtime_clip(filename):
 def run_model_on_clip(model, clip_filename='runtime_temp.wav'):
     label_decoder_dict = {0:'empty', 1:'enough', 2:'not_enough'}
     x = graph_spectrogram(clip_filename)
-    x = x.reshape((1, x.shape[1], x.shape[0]))
+    x = x.transpose().reshape((1, x.shape[1], x.shape[0]))
     preds = model.predict(x)
     return label_decoder_dict[np.argmax(preds)], preds
 
