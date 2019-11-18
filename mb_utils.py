@@ -8,6 +8,8 @@ from keras.utils import np_utils
 import pickle
 from datetime import datetime
 import wave
+import librosa
+import soundfile as sf
 
 # Calculate and plot spectrogram for a wav audio file
 def graph_spectrogram(wav_file):
@@ -58,36 +60,50 @@ def load_raw_audio_old():
 
 
 # my version of load_raw_audio
-def load_raw_audio():
+def load_raw_audio(clips_location_dict = {'enough': 'recorded_clips/enoughs',
+                                          'backgrounds': 'recorded_clips/fullbackgrounds_trimmed_5sec',
+                                          'not_enough':  'recorded_clips/notenoughs',
+                                          'empty': 'recorded_clips/empties'}):
     enoughs = []
     fullbackgrounds = []
     notenoughs = []
     empties = []
-    print('enoughs...')
-    for filename in os.listdir("recorded_clips/enoughs"):
-        if filename.endswith("wav"):
-            #print(filename)
-            enough = AudioSegment.from_wav("recorded_clips/enoughs/"+filename)
-            enoughs.append(enough)
-    print('backgrounds...')
-    for filename in os.listdir("recorded_clips/fullbackgrounds_trimmed_5sec"):
-        if filename.endswith("wav"):
-            print(filename)
-            fullbackground = AudioSegment.from_wav("recorded_clips/fullbackgrounds_trimmed_5sec/"+filename)
-            fullbackgrounds.append(fullbackground)
-    print('notenoughs...')
-    for filename in os.listdir("recorded_clips/notenoughs"):
-        if filename.endswith("wav"):
-            #print(filename)
-            notenough = AudioSegment.from_wav("recorded_clips/notenoughs/"+filename)
-            notenoughs.append(notenough)
-    print('empties...')
-    for filename in os.listdir("recorded_clips/empties"):
-        if filename.endswith("wav"):
-            #print(filename)
-            empty = AudioSegment.from_wav("recorded_clips/empties/"+filename)
-            empties.append(empty)
-    return enoughs, notenoughs, empties, fullbackgrounds
+    clips_dict = {}
+    for k in clips_location_dict.keys():
+        clips_dict[k] = []
+    for k, v in clips_location_dict.items():
+        print('{:.<15}...'.format(k), end='')
+        for filename in os.listdir(v):
+            if filename.endswith('wav'):
+#                print(filename)
+                clip = AudioSegment.from_wav('{}/{}'.format(v, filename))
+                clips_dict[k].append(clip)
+        print('{} clips.'.format(len(clips_dict[k])))
+#    print('enoughs...')
+#    for filename in os.listdir(enoughs_folder):
+#        if filename.endswith("wav"):
+#            print(filename)
+#            enough = AudioSegment.from_wav("{}/{}".format(enoughs_folder, filename))
+#            enoughs.append(enough)
+#    print('backgrounds...')
+#    for filename in os.listdir("recorded_clips/fullbackgrounds_trimmed_5sec"):
+#        if filename.endswith("wav"):
+#            print(filename)
+#            fullbackground = AudioSegment.from_wav("recorded_clips/fullbackgrounds_trimmed_5sec/"+filename)
+#            fullbackgrounds.append(fullbackground)
+#    print('notenoughs...')
+#    for filename in os.listdir("recorded_clips/notenoughs"):
+#        if filename.endswith("wav"):
+#            print(filename)
+#            notenough = AudioSegment.from_wav("recorded_clips/notenoughs/"+filename)
+#            notenoughs.append(notenough)
+#    print('empties...')
+#    for filename in os.listdir("recorded_clips/empties"):
+#        if filename.endswith("wav"):
+#            print(filename)
+#            empty = AudioSegment.from_wav("recorded_clips/empties/"+filename)
+#            empties.append(empty)
+    return clips_dict
 
 
 # Preprocess the audio to the correct format. trims to 10 sec.
@@ -309,3 +325,37 @@ def record_and_process_5_seconds(idx, samp_rate, chunk, record_secs, stream,chan
     preds_nice = ', '.join(['{:.4f}'.format(p) for p in preds[0]])
     print('   prediction: {}.   [{}]'.format(pred, preds_nice))
     return pred
+
+
+# augment data by using librosa.effects library to pitch shift and time stretch
+def data_augmentation(folder_path, n_pitch_shifts, n_time_stretches):
+    for filename in os.listdir(folder_path):
+        if filename.endswith('wav') and len(filename) < 8:
+            audio_path = folder_path + filename
+
+            # load base audio clip
+            base_audio, sampling_rate = librosa.load(audio_path, sr=44100)
+
+            # randomly collect some pitch shift values
+            pitch_shifts = np.random.normal(0, 1.5/2, size = n_pitch_shifts)
+
+            # randomly collect some time stretch values
+            time_stretches = np.random.normal(1, 0.2/2, size = n_time_stretches)
+
+            print(filename)
+            print('Pitch shifts (half steps):   {}'.format(pitch_shifts))
+            print('Time stretches (multiplier): {}'.format(time_stretches))
+
+            # choose a pitch shift value and time stretch value (really in a loop)
+            for i, ps in enumerate(pitch_shifts):
+                for j, ts in enumerate(time_stretches):
+#                    print('Pitch shift (half steps): {:.3f}.  Time stretch (multiplier): {:.3f}...'.format(ps, ts), 
+#                          end='')
+
+                    temp_audio = librosa.effects.pitch_shift(base_audio, sampling_rate, ps)
+                    new_audio = librosa.effects.time_stretch(temp_audio, ts)
+
+                    filename_minus_wav = filename[:-4]
+                    new_audio_filename = '{}_{:0>2}_{:0>2}.wav'.format(filename_minus_wav, i, j)
+                    sf.write(folder_path+new_audio_filename, new_audio, sampling_rate)
+            
