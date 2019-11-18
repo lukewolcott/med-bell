@@ -337,10 +337,10 @@ def data_augmentation(folder_path, n_pitch_shifts, n_time_stretches):
             base_audio, sampling_rate = librosa.load(audio_path, sr=44100)
 
             # randomly collect some pitch shift values
-            pitch_shifts = np.random.normal(0, 1.5/2, size = n_pitch_shifts)
+            pitch_shifts = np.random.normal(0, 2.5/2, size = n_pitch_shifts)  #1.5 
 
             # randomly collect some time stretch values
-            time_stretches = np.random.normal(1, 0.2/2, size = n_time_stretches)
+            time_stretches = np.random.normal(1, 0.4/2, size = n_time_stretches)  #0.2
 
             print(filename)
             print('Pitch shifts (half steps):   {}'.format(pitch_shifts))
