@@ -72,7 +72,7 @@ def load_raw_audio():
     print('backgrounds...')
     for filename in os.listdir("recorded_clips/fullbackgrounds_trimmed_5sec"):
         if filename.endswith("wav"):
-            #print(filename)
+            print(filename)
             fullbackground = AudioSegment.from_wav("recorded_clips/fullbackgrounds_trimmed_5sec/"+filename)
             fullbackgrounds.append(fullbackground)
     print('notenoughs...')
@@ -182,6 +182,9 @@ def make_training_sample(backgrounds, samples_to_add, label):
 
     sample_to_add = samples_to_add[sample_idx]
     background = backgrounds[bkgnd_idx]
+    
+    # make background quieter
+    background = background - 20
 
     previous_segments = []
 
