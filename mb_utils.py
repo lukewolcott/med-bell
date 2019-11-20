@@ -234,7 +234,12 @@ def make_training_sample(backgrounds, samples_to_add, label):
 
     previous_segments = []
 
-    background, segment_time = insert_audio_clip(background, sample_to_add, previous_segments)
+    if (label=='empty') and (np.random.normal()>0):
+        # if label is empty, 50% chance we don't put in an empty clip
+        background = background
+        sample_idx = -1
+    else:
+        background, segment_time = insert_audio_clip(background, sample_to_add, previous_segments)
 
     y = label
 
@@ -361,7 +366,7 @@ def record_and_process_5_seconds(idx, samp_rate, chunk, record_secs, stream,chan
 
 
 # augment data by using librosa.effects library to pitch shift and time stretch
-def data_augmentation(folder_path, n_pitch_shifts, n_time_stretches):
+def data_augmentation(folder_path, n_pitch_shifts, n_time_stretches, ps_sigma=1.5, ts_sigma=0.2):
     for filename in os.listdir(folder_path):
         if filename.endswith('wav') and len(filename) < 8:
             audio_path = folder_path + filename
@@ -370,10 +375,16 @@ def data_augmentation(folder_path, n_pitch_shifts, n_time_stretches):
             base_audio, sampling_rate = librosa.load(audio_path, sr=44100)
 
             # randomly collect some pitch shift values
-            pitch_shifts = np.random.normal(0, 2.5/2, size = n_pitch_shifts)  #1.5 
+            if n_pitch_shifts == 0:
+                pitch_shifts = [0]
+            else:
+                pitch_shifts = np.random.normal(0, ps_sigma/2, size = n_pitch_shifts)  #1.5 
 
             # randomly collect some time stretch values
-            time_stretches = np.random.normal(1, 0.4/2, size = n_time_stretches)  #0.2
+            if n_time_stretches == 0:
+                time_stretches = [1]
+            else:
+                time_stretches = np.random.normal(1, ts_sigma/2, size = n_time_stretches)  #0.2
 
             print(filename)
             print('Pitch shifts (half steps):   {}'.format(pitch_shifts))
