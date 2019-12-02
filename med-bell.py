@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-########################################################################
-# start up meditation bell timer
-########################################################################
+######################################################
+# run meditation bell timer
+######################################################
 from PCF8574 import PCF8574_GPIO
 from Adafruit_LCD1602 import Adafruit_CharLCD
 
@@ -11,57 +11,22 @@ import time
 import RPi.GPIO as GPIO
 
 ######################################################
-# initialize 
-
-# LCD
-PCF8574_address = 0x27  # I2C address of the PCF8574 chip.
-PCF8574A_address = 0x3F  # I2C address of the PCF8574A chip.
-# Create PCF8574 GPIO adapter.
-try:
-	mcp = PCF8574_GPIO(PCF8574_address)
-except:
-	try:
-		mcp = PCF8574_GPIO(PCF8574A_address)
-	except:
-		print ('I2C Address Error !')
-		exit(1)
-# Create LCD, passing in MCP GPIO adapter.
-lcd = Adafruit_CharLCD(pin_rs=0, pin_e=2, pins_db=[4,5,6,7], GPIO=mcp)
-
-# SERVO
-#define pulse offset of servo
-OFFSE_DUTY = 0.5        
-#define pulse duty cycle for minimum angle of servo
-SERVO_MIN_DUTY = 2.5+OFFSE_DUTY     
-#define pulse duty cycle for maximum angle of servo
-SERVO_MAX_DUTY = 12.5+OFFSE_DUTY    
-servoPin = 12
-
-# LED
-breathing_led_pins = {'pin_R':33, 'pin_G':35, 'pin_B':37}
-
-# other initialization
-minutes = 60
-button_pressed = False
-buttonPin = 22
-
-mode = 'LW'
-
-
-#######################################################
 # function definitions
 
 # get CPU temperature and store it into file "/sys/class/thermal/thermal_zone0/temp"
-def get_cpu_temp():     
+# TODO: remove
+def get_cpu_temp():
     tmp = open('/sys/class/thermal/thermal_zone0/temp')
     cpu = tmp.read()
     tmp.close()
     return '{:.2f}'.format( float(cpu)/1000 ) + ' C'
 
 # get system time
+# TODO: remove
 def get_time_now():     
     return datetime.now().strftime('    %H:%M:%S')
     
+# TODO: remove
 def freenove_loop():
     mcp.output(3,1)     # turn on LCD backlight
     lcd.begin(16,2)     # set number of LCD lines and columns
@@ -72,22 +37,7 @@ def freenove_loop():
         lcd.message( get_time_now() )   # display the time
         sleep(1)
 
-def lcd_message(lcd, message):
-    lcd.setCursor(0,0)
-    lcd.message(message)
-
-def startup_lcd(mode):
-    mcp.output(3,1)
-    lcd.begin(16,2)
-
-    # start up message
-    if mode == 'LW':
-        lcd_message(lcd, 'Hello, Luke W...\n')
-    else:
-        lcd_message(lcd, 'Hello, Luke D...\n')
-    sleep(3)
-    lcd.clear()
-
+# TODO: remove
 def count_down(count_from):
     c = count_from
     while c > 0:
@@ -98,11 +48,41 @@ def count_down(count_from):
         sleep(1)
     lcd.clear()
 
+# TODO: remove
+def Freenove_buttonEvent(channel):
+    global ledState
+    print ('buttonEvent GPIO%d' %channel)
+    ledState = not ledState
+    if ledState :
+        print ('Turn on LED ... ')
+    else :
+        print ('Turn off LED ... ')
+    GPIO.output(ledPin,ledState)
+############################################################
+
+def startup_lcd(mode):
+#    mcp.output(3, 1)
+#    lcd.begin(16, 2)
+
+    # startup message
+    if mode == 'LW':
+        lcd_message(lcd, 'Hello, Luke W...\n')
+    else:
+        lcd_message(lcd, 'Hello, Luke D...\n')
+    sleep(3)
+    lcd.clear()
+
+
+def lcd_message(lcd, message):
+    lcd.setCursor(0, 0)
+    lcd.message(message)
+
+
 def show_time_left(lcd, c):
     mins = int(c/60)
     secs = int(c%60)
     lcd_message(lcd, 'Time: {:0>2}m {:0>2}sec'.format(mins, secs))
-    
+
 
 def destroy_lcd():
     lcd.clear()
@@ -114,176 +94,266 @@ def pause_indefinitely():
     while True:
         time.sleep(99)
 
-def map( value, fromLow, fromHigh, toLow, toHigh):
+
+def map(value, fromLow, fromHigh, toLow, toHigh):
     return (toHigh-toLow)*(value-fromLow) / (fromHigh-fromLow) + toLow
+
 
 def setup_gpio():
     global p
-    global p_R,p_G,p_B
+    global p_R, p_G, p_B
     GPIO.setmode(GPIO.BOARD)       # Numbers GPIOs by physical location
 
     # set up servo pin
-    GPIO.setup(servoPin, GPIO.OUT)   # Set servoPin's mode is output
-    GPIO.output(servoPin, GPIO.LOW)  # Set servoPin to low
-    p = GPIO.PWM(servoPin, 50)     # set Frequece to 50Hz
+    GPIO.setup(servo_pin, GPIO.OUT)   # Set servo_pin's mode is output
+    GPIO.output(servo_pin, GPIO.LOW)  # Set servo_pin to low
+    p = GPIO.PWM(servo_pin, 50)     # set Frequece to 50Hz
     p.start(0)                     # Duty Cycle = 0
 
-    # Set buttonPin's mode is input, and pull up to high
-    GPIO.setup(buttonPin, GPIO.IN, pull_up_down=GPIO.PUD_UP)    
+    # Set button_pin's mode is input, and pull up to high
+    GPIO.setup(button_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+
+    # set switch pins as input, pulled up to high
+    GPIO.setup(onoff_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+    GPIO.setup(lwld_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
     # set up breathing led pins
     for i in breathing_led_pins:
         GPIO.setup(breathing_led_pins[i], GPIO.OUT)
-        GPIO.output(breathing_led_pins[i], GPIO.HIGH) # Set pins to high(+3.3V) to off led
+        GPIO.output(breathing_led_pins[i], GPIO.HIGH)  # Set pins to high(+3.3V) to off led
     p_R = GPIO.PWM(breathing_led_pins['pin_R'], 2000)  # set Frequece to 2KHz
     p_G = GPIO.PWM(breathing_led_pins['pin_G'], 2000)
     p_B = GPIO.PWM(breathing_led_pins['pin_B'], 2000)
 
-        
+
 # make the servo rotate to specific angle (0-180 degrees) 
-def servoWrite(angle):
-    if(angle<0):
+def servo_write(angle):
+    if angle < 0:
         angle = 0
-    elif(angle > 180):
+    elif angle > 180:
         angle = 180
-    #map the angle to duty cycle and output it
-    p.ChangeDutyCycle(map(angle,0,180,SERVO_MIN_DUTY,SERVO_MAX_DUTY))
+    # map the angle to duty cycle and output it
+    p.ChangeDutyCycle(map(angle, 0, 180, SERVO_MIN_DUTY, SERVO_MAX_DUTY))
     
 
 # swings counter-clockwise once, and retracts 
 def hit_ccw(start_angle, hit_angle, in_sleeptime, out_sleeptime):
     print('Swinging CCW...')
     for dc in range (start_angle, hit_angle, 1):
-        servoWrite(dc)
+        servo_write(dc)
         time.sleep(in_sleeptime)
     for dc in range(hit_angle, start_angle, -1):
-        servoWrite(dc)
+        servo_write(dc)
         time.sleep(out_sleeptime)
 
-# shut down connection to servo pin
-def destroy_servo():
-    p.stop()
-
-# shut down the connection to GPIO        
-def destroy_pwm_and_gpio():
-    p_R.stop()
-    p_G.stop()
-    p_B.stop()
-    GPIO.cleanup()
-
-def Freenove_buttonEvent(channel):
-	global ledState 
-	print ('buttonEvent GPIO%d' %channel)
-	ledState = not ledState
-	if ledState :
-		print ('Turn on LED ... ')
-	else :
-		print ('Turn off LED ... ')
-	GPIO.output(ledPin,ledState)
 
 def button_event(channel):
     global button_pressed
     print('button event GPIO{}'.format(channel))
     button_pressed = True
 
-# sets color on breathing LED
-def setColor(r_val,g_val,b_val):   
-	p_R.ChangeDutyCycle(r_val)
-	p_G.ChangeDutyCycle(g_val)
-	p_B.ChangeDutyCycle(b_val)
 
-# DO THIS FOR LUKE W
-def lukew(GPIO, button_pressed):
+# sets color on breathing LED
+def set_color(r_val, g_val, b_val):
+    p_R.ChangeDutyCycle(r_val)
+    p_G.ChangeDutyCycle(g_val)
+    p_B.ChangeDutyCycle(b_val)
+
+
+# shut down connection to servo pin
+def destroy_servo():
+    p.stop()
+
+
+# shut down the connection to GPIO
+def destroy_pwm_and_gpio():
+    p_R.stop()
+    p_G.stop()
+    p_B.stop()
+    GPIO.cleanup()
+
+
+def reset_prediction():
+    file = open('current-prediction.txt', 'w')
+    file.write('empty')
+    file.close()
+
+
+def set_recording_state(text):
+    file = open('current-recording-state.txt', 'w')
+    file.write(text)
+    file.close()
+
+
+# DO THIS FOR LW
+def lw(GPIO, button_pressed):
+    button_pressed = False
     start_time = datetime.now()
     
     # start with some time on the clock
-    starting_buffer_time = (0.1)*minutes
-    done_time = start_time + timedelta(seconds = starting_buffer_time)
-    
-    GPIO.add_event_detect(buttonPin,GPIO.FALLING,callback = button_event,bouncetime=300)
-    while (done_time > datetime.now()):
+    starting_buffer_time = 0.1*minutes
+    done_time = start_time + timedelta(seconds=starting_buffer_time)
+    set_recording_state('on')
+
+    GPIO.add_event_detect(button_pin, GPIO.FALLING, callback=button_event, bouncetime=300)
+    while done_time > datetime.now():
         if button_pressed:
-            done_time = done_time + timedelta(minutes = 0.1)
+            done_time = done_time + timedelta(minutes=0.1)
             button_pressed = False
 
         file = open('current-prediction.txt')
-        prediction = file.read().replace('\n','')
+        prediction = file.read().replace('\n', '')
         file.close()
 
         print(prediction)
         if prediction == 'enough':
+            lcd_message(lcd, 'Hitting gong...')
+            reset_prediction()
+            time.sleep(3)
             break
+        if prediction == 'not_enough':
+            done_time = done_time + timedelta(minutes=1)
+            lcd_message(lcd, 'Adding time...')
+            reset_prediction()
+            time.sleep(3)
         
         show_time_left(lcd, (done_time - datetime.now()).seconds)
         time.sleep(1)
+
+    set_recording_state('off')
 
     # hit the gong
     hit_ccw(90, 160, 0.002, 0.002)
     destroy_servo()
 
-# DO THIS FOR LUKE D
-def luked():
-    p_R.start(0)      # Initial duty Cycle = 0
+
+# DO THIS FOR LD
+def ld():
+    button_pressed = False
+    p_R.start(0)
     p_G.start(0)
     p_B.start(0)
-
-    r = 119
-    g = 0
-    b = 135
+    r0, g0, b0 = 119, 0, 135
+    r1, g1, b1 = 0, 0, 255
     in_breath_time = 5
     out_breath_time = 7
 
-    for breath in range(3):
-        print('breath number: {}'.format(breath))
+    GPIO.add_event_detect(button_pin, GPIO.FALLING, callback=button_event, bouncetime=300)
+    breath_count = 0
+
+    while (not button_pressed) and (GPIO.input(onoff_pin) == GPIO.LOW):
+        breath_count += 1
+        lcd_message(lcd, 'Breath: {}'.format(breath))
         print('breath in')
-        for i in range (0, 101):
-            r_val=100 - map(r*i/100, 0, 255, 0, 100)
-            g_val=100 - map(g*i/100, 0, 255, 0, 100)
-            b_val=100 - map(b*i/100, 0, 255, 0, 100)
-            setColor(r_val, g_val, b_val)
+        for i in range(0, 101):
+            r_val = 100 - map(i, 0, 100, r1/255*100, r0/255*100)
+            g_val = 100 - map(i, 0, 100, g1/255*100, g0/255*100)
+            b_val = 100 - map(i, 0, 100, b1/255*100, b0/255*100)
+            set_color(r_val, g_val, b_val)
             time.sleep(0.01*in_breath_time)
 
         print('breath out')
-        for i in range (100, 0, -1):
-            r_val=100 - map(r*i/100, 0, 255, 0, 100)
-            g_val=100 - map(g*i/100, 0, 255, 0, 100)
-            b_val=100 - map(b*i/100, 0, 255, 0, 100)
-            setColor(r_val, g_val, b_val)
-            time.sleep(0.01*in_breath_time)
+        for i in range(100, 0, -1):
+            r_val = 100 - map(i, 0, 100, r1/255*100, r0/255*100)
+            g_val = 100 - map(i, 0, 100, g1/255*100, g0/255*100)
+            b_val = 100 - map(i, 0, 100, b1/255*100, b0/255*100)
+            set_color(r_val, g_val, b_val)
+            time.sleep(0.01*out_breath_time)
+
+#        for i in range(0, 101):
+#            r_val=100 - map(r*i/100, 0, 255, 0, 100)
+#            g_val=100 - map(g*i/100, 0, 255, 0, 100)
+#            b_val=100 - map(b*i/100, 0, 255, 0, 100)
+#            set_color(r_val, g_val, b_val)
+#            time.sleep(0.01*in_breath_time)
+#
+#        print('breath out')
+#        for i in range(100, 0, -1):
+#            r_val=100 - map(r*i/100, 0, 255, 0, 100)
+#            g_val=100 - map(g*i/100, 0, 255, 0, 100)
+#            b_val=100 - map(b*i/100, 0, 255, 0, 100)
+#            set_color(r_val, g_val, b_val)
+#            time.sleep(0.01*out_breath_time)
+
+    # TODO: add code that  will show heart rate
 
 
-#    r_val=100 - map(r/50, 0, 255, 0, 100)
-#    g_val=100 - map(g/50, 0, 255, 0, 100)
-#    b_val=100 - map(b/50, 0, 255, 0, 100)
+######################################################
+# initialize devices
 
-#    setColor(r_val, g_val, b_val)
-#    time.sleep(5)
-    
+# LCD
+PCF8574_address = 0x27  # I2C address of the PCF8574 chip.
+PCF8574A_address = 0x3F  # I2C address of the PCF8574A chip.
+# Create PCF8574 GPIO adapter.
+try:
+    mcp = PCF8574_GPIO(PCF8574_address)
+except:
+    try:
+        mcp = PCF8574_GPIO(PCF8574A_address)
+    except:
+        print('I2C Address Error !')
+        exit(1)
+# Create LCD, passing in MCP GPIO adapter.
+lcd = Adafruit_CharLCD(pin_rs=0, pin_e=2, pins_db=[4,5,6,7], GPIO=mcp)
 
-    
+# SERVO
+# define pulse offset of servo
+OFFSE_DUTY = 0.5
+# define pulse duty cycle for minimum angle of servo
+SERVO_MIN_DUTY = 2.5+OFFSE_DUTY
+# define pulse duty cycle for maximum angle of servo
+SERVO_MAX_DUTY = 12.5+OFFSE_DUTY
+servo_pin = 12
+
+# LED
+breathing_led_pins = {'pin_R':33, 'pin_G':35, 'pin_B':37}
+
+# other initialization
+minutes = 60
+button_pin = 22
+
+# TODO: set these values correctly
+onoff_pin = 100
+lwld_pin = 101
+
+mode = 'LW'
 ####################################################
 if __name__ == '__main__':
-    print ('Program is starting ... ')
+    print('Program is starting ... ')
+    time.sleep(3)
     setup_gpio()
+    mcp.output(3, 1)
+    lcd.begin(16, 2)
 
-    mode = 'LW'
-#    startup_lcd(mode)
-#   lukew(GPIO, button_pressed)
+    while GPIO.input(onoff_pin) == GPIO.HIGH:  # means switch is in DOWN position and current is not flowing
+        print('Breadboard is off!')
+        lcd_message(lcd, 'Breadboard off.')
+        time.sleep(1)
 
-    mode = 'LD'
+    print('Breadboard is on!')
+
+    # mode is LW if switch is in DOWN position and LD if in UP position
+    mode = 'LW' if GPIO.input(lwld_pin) == GPIO.HIGH else 'LD'
     startup_lcd(mode)
-    luked()
 
-    
-    # shut things down and exit program
+    if mode == 'LW':
+        lw(GPIO, button_pressed)
+    elif mode == 'LD':
+        ld()
+
+    # shut things down
     destroy_lcd()
     destroy_pwm_and_gpio()
+
+    # wait for breadboard to be shut off to end program
+    while GPIO.input(onoff_pin) == GPIO.LOW:
+        time.sleep(1)
     exit(1)
-        
-    # just wait for keyboard interrupt then shut things down
-    try:
-        pause_indefinitely()
-    except KeyboardInterrupt:
-        destroy_lcd()
-        destroy_pwm_and_gpio()
+
+#    # just wait for keyboard interrupt then shut things down
+#    try:
+#        pause_indefinitely()
+#    except KeyboardInterrupt:
+#        destroy_lcd()
+#        destroy_pwm_and_gpio()
 
