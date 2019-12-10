@@ -61,14 +61,16 @@ def Freenove_buttonEvent(channel):
 ############################################################
 
 def startup_lcd(mode):
-#    mcp.output(3, 1)
-#    lcd.begin(16, 2)
+    mcp.output(3, 1)
+    lcd.begin(16, 2)
 
     # startup message
     if mode == 'LW':
         lcd_message(lcd, 'Hello, Luke W...\n')
+        # print('Hello, Luke W...')
     else:
         lcd_message(lcd, 'Hello, Luke D...\n')
+        # print('Hello, Luke D...')
     sleep(3)
     lcd.clear()
 
@@ -76,16 +78,19 @@ def startup_lcd(mode):
 def lcd_message(lcd, message):
     lcd.setCursor(0, 0)
     lcd.message(message)
+    print(message)
 
 
 def show_time_left(lcd, c):
     mins = int(c/60)
     secs = int(c%60)
     lcd_message(lcd, 'Time: {:0>2}m {:0>2}sec'.format(mins, secs))
+    # print('Time: {:0>2}m {:0>2}sec'.format(mins, secs))
 
 
 def destroy_lcd():
     lcd.clear()
+    print('destroying lcd...')
 
 
 # pauses until keyboard exit
@@ -151,7 +156,7 @@ def button_event(channel):
     global button_pressed
     print('button event GPIO{}'.format(channel))
     button_pressed = True
-
+    # print('button_pressed value: {}'.format(button_pressed))
 
 # sets color on breathing LED
 def set_color(r_val, g_val, b_val):
@@ -186,13 +191,14 @@ def set_recording_state(text):
 
 
 # DO THIS FOR LW
-def lw(GPIO, button_pressed):
-    button_pressed = False
+def lw(GPIO):#, button_pressed):
+    global button_pressed
     start_time = datetime.now()
     
     # start with some time on the clock
     starting_buffer_time = 0.1*minutes
     done_time = start_time + timedelta(seconds=starting_buffer_time)
+    reset_prediction()
     set_recording_state('on')
 
     GPIO.add_event_detect(button_pin, GPIO.FALLING, callback=button_event, bouncetime=300)
@@ -212,7 +218,7 @@ def lw(GPIO, button_pressed):
             time.sleep(3)
             break
         if prediction == 'not_enough':
-            done_time = done_time + timedelta(minutes=1)
+            done_time = done_time + timedelta(minutes=0.2)
             lcd_message(lcd, 'Adding time...')
             reset_prediction()
             time.sleep(3)
@@ -228,8 +234,8 @@ def lw(GPIO, button_pressed):
 
 
 # DO THIS FOR LD
-def ld():
-    button_pressed = False
+def ld(GPIO):
+    global button_pressed
     p_R.start(0)
     p_G.start(0)
     p_B.start(0)
@@ -241,9 +247,10 @@ def ld():
     GPIO.add_event_detect(button_pin, GPIO.FALLING, callback=button_event, bouncetime=300)
     breath_count = 0
 
-    while (not button_pressed) and (GPIO.input(onoff_pin) == GPIO.LOW):
+    while (not button_pressed) and (GPIO.input(onoff_pin) != GPIO.HIGH):
         breath_count += 1
-        lcd_message(lcd, 'Breath: {}'.format(breath))
+        # print('starting while loop. button_pressed: {}'.format(button_pressed))
+        lcd_message(lcd, 'Breath: {}'.format(breath_count))
         print('breath in')
         for i in range(0, 101):
             r_val = 100 - map(i, 0, 100, r1/255*100, r0/255*100)
@@ -312,11 +319,9 @@ breathing_led_pins = {'pin_R':33, 'pin_G':35, 'pin_B':37}
 minutes = 60
 button_pin = 22
 
-# TODO: set these values correctly
-onoff_pin = 100
-lwld_pin = 101
+onoff_pin = 31
+lwld_pin = 40
 
-mode = 'LW'
 ####################################################
 if __name__ == '__main__':
     print('Program is starting ... ')
@@ -324,6 +329,7 @@ if __name__ == '__main__':
     setup_gpio()
     mcp.output(3, 1)
     lcd.begin(16, 2)
+    button_pressed = False
 
     while GPIO.input(onoff_pin) == GPIO.HIGH:  # means switch is in DOWN position and current is not flowing
         print('Breadboard is off!')
@@ -337,18 +343,21 @@ if __name__ == '__main__':
     startup_lcd(mode)
 
     if mode == 'LW':
-        lw(GPIO, button_pressed)
+        lw(GPIO)
     elif mode == 'LD':
-        ld()
-
-    # shut things down
-    destroy_lcd()
-    destroy_pwm_and_gpio()
+        ld(GPIO)
 
     # wait for breadboard to be shut off to end program
     while GPIO.input(onoff_pin) == GPIO.LOW:
         time.sleep(1)
-    exit(1)
+
+    # shut things down
+    destroy_lcd()
+    destroy_pwm_and_gpio()
+#    from subprocess import call
+#    print('shutting down...')
+#    call("sudo shutdown -h now", shell=True)
+    #exit(0)
 
 #    # just wait for keyboard interrupt then shut things down
 #    try:

@@ -8,7 +8,7 @@ from keras.utils import np_utils
 import pickle
 from datetime import datetime
 import wave
-import librosa
+#import librosa
 import soundfile as sf
 
 # Calculate and plot spectrogram for a wav audio file
@@ -367,6 +367,7 @@ def record_and_process_5_seconds(idx, samp_rate, chunk, record_secs, stream,chan
 
 # augment data by using librosa.effects library to pitch shift and time stretch
 def data_augmentation(folder_path, n_pitch_shifts, n_time_stretches, ps_sigma=1.5, ts_sigma=0.2):
+    import librosa
     for filename in os.listdir(folder_path):
         if filename.endswith('wav') and len(filename) < 8:
             audio_path = folder_path + filename
