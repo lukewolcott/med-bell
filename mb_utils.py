@@ -341,7 +341,7 @@ def record_and_process_5_seconds(idx, samp_rate, chunk, record_secs, stream,chan
 
     # loop through stream and append audio chunks to frame array
     for ii in range(0,int((samp_rate/chunk)*record_secs)):
-        data = stream.read(chunk)
+        data = stream.read(chunk, exception_on_overflow=False)
         frames.append(data)
 
     #print("finished recording {}".format(idx))
