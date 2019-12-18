@@ -317,7 +317,7 @@ def preprocess_runtime_clip(filename, background_filepath=None):
     if background_filepath:
         padding = AudioSegment.from_wav(background_filepath)[:5000]
     else:
-        padding = padding = AudioSegment.silent(duration=5000)
+        padding = AudioSegment.silent(duration=5000)
     segment = AudioSegment.from_wav(filename)[:5000]
     segment = padding.overlay(segment)
     segment = segment.set_frame_rate(44100)
@@ -340,7 +340,7 @@ def record_and_process_5_seconds(idx, samp_rate, chunk, record_secs, stream,chan
     frames = []
 
     # loop through stream and append audio chunks to frame array
-    for ii in range(0,int((samp_rate/chunk)*record_secs)):
+    for ii in range(0,int((samp_rate/chunk)*record_secs)+1):
         data = stream.read(chunk, exception_on_overflow=False)
         frames.append(data)
 
