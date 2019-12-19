@@ -10,6 +10,7 @@ from datetime import datetime
 import wave
 #import librosa
 import soundfile as sf
+from shutil import copyfile
 
 # Calculate and plot spectrogram for a wav audio file
 def graph_spectrogram(wav_file):
@@ -234,8 +235,8 @@ def make_training_sample(backgrounds, samples_to_add, label):
 
     previous_segments = []
 
-    if (label=='empty') and (np.random.normal()>0):
-        # if label is empty, 50% chance we don't put in an empty clip
+    if (label == 'empty') and (np.random.uniform() < 0.8):
+        # if label is empty, 80% chance we don't put in an empty clip
         background = background
         sample_idx = -1
     else:
@@ -363,13 +364,23 @@ def record_and_process_5_seconds(idx, samp_rate, chunk, record_secs, stream,chan
     preds_nice = ', '.join(['{:.4f}'.format(p) for p in preds[0]])
     print('   prediction: {}.   [{}]'.format(pred, preds_nice))
     return pred
+    
+    
+# randomly put 80% of original background clips into train, and 20% into val
+def split_into_train_test(folder, train_ratio=0.8, seed=134):
+    clip_filelist = os.listdir(folder)
+    num_clips = len(clip_filelist)
+    np.random.seed(seed)
+    mask = np.random.choice(['train', 'val'], size=num_clips, p=[train_ratio, 1-train_ratio])
+    for file, dest in zip(clip_filelist, mask):
+        copyfile('{}/{}'.format(folder, file), '{}_da_{}/{}'.format(folder, dest, file))
 
 
 # augment data by using librosa.effects library to pitch shift and time stretch
 def data_augmentation(folder_path, n_pitch_shifts, n_time_stretches, ps_sigma=1.5, ts_sigma=0.2):
     import librosa
     for filename in os.listdir(folder_path):
-        if filename.endswith('wav') and len(filename) < 8:
+        if filename.endswith('wav') and '_' not in filename:
             audio_path = folder_path + filename
 
             # load base audio clip
