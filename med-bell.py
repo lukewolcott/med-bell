@@ -232,12 +232,35 @@ def lw(GPIO):#, button_pressed):
     hit_ccw(90, 160, 0.002, 0.002)
     destroy_servo()
 
-def compile_ramp():
+
+def f_factory(i, interval):
+    start_point, end_point = interval
+    slope = (end_point[1] - start_point[1])/(end_point[0] - start_point[0])
+    def f(x):
+        return slope*(x  -  start_point[0]) + start_point[1]
+    return f
+
+
+def compile_ramp(list_of_vertices):
+    num_vertices = len(list_of_vertices)
+    num_lines = num_vertices - 1
+    intervals, functions = {}, {}
+    for line_idx in range(num_lines):
+        intervals[line_idx] = (list_of_vertices[line_idx], list_of_vertices[line_idx+1])
+    for i, interval in intervals.items():
+        f = f_factory(i, interval)
+        functions[i] = f
+    list_of_xpts = [v[0] for v in list_of_vertices]
+    fn_assignments = np.repeat([-1], 101)
+    for i, x in enumerate(list_of_xpts):
+        fn_assignments += [0]*(x+1) + [1]*(101-x-1)
+    fn_assignments[0] = 0
     ramp = {}
     for i in range(101):
-        ramp[i] = i
+        ramp[i] = functions[fn_assignments[i]](i)
     return ramp
-    
+
+
 # DO THIS FOR LD
 def ld(GPIO):
     global button_pressed
@@ -249,7 +272,8 @@ def ld(GPIO):
     in_breath_time = 2 #5
     out_breath_time = 2 #7
 
-    ramp = compile_ramp()
+    list_of_vertices = [[0,0], [50,20], [80,50], [100,100]]
+    ramp = compile_ramp(list_of_vertices)
 
     GPIO.add_event_detect(button_pin, GPIO.FALLING, callback=button_event, bouncetime=300)
     breath_count = 0
