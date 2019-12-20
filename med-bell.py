@@ -119,13 +119,13 @@ def setup_gpio():
     GPIO.setup(button_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
     # set switch pins as input, pulled up to high
-    GPIO.setup(onoff_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-    GPIO.setup(lwld_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+    GPIO.setup(offlw_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+    GPIO.setup(offld_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
     # set up breathing led pins
     for i in breathing_led_pins:
         GPIO.setup(breathing_led_pins[i], GPIO.OUT)
-        GPIO.output(breathing_led_pins[i], GPIO.HIGH)  # Set pins to high(+3.3V) to off led
+        GPIO.output(breathing_led_pins[i], GPIO.LOW)  # Set pins to high(+3.3V) to off led
     p_R = GPIO.PWM(breathing_led_pins['pin_R'], 2000)  # set Frequece to 2KHz
     p_G = GPIO.PWM(breathing_led_pins['pin_G'], 2000)
     p_B = GPIO.PWM(breathing_led_pins['pin_B'], 2000)
@@ -232,38 +232,49 @@ def lw(GPIO):#, button_pressed):
     hit_ccw(90, 160, 0.002, 0.002)
     destroy_servo()
 
-
+def compile_ramp():
+    ramp = {}
+    for i in range(101):
+        ramp[i] = i
+    return ramp
+    
 # DO THIS FOR LD
 def ld(GPIO):
     global button_pressed
     p_R.start(0)
     p_G.start(0)
     p_B.start(0)
-    r0, g0, b0 = 119, 0, 135
-    r1, g1, b1 = 0, 0, 255
-    in_breath_time = 5
-    out_breath_time = 7
+    r0, g0, b0 = 119, 0, 135 #119, 0, 135
+    r1, g1, b1 = 0,0,0 #255
+    in_breath_time = 2 #5
+    out_breath_time = 2 #7
+
+    ramp = compile_ramp()
 
     GPIO.add_event_detect(button_pin, GPIO.FALLING, callback=button_event, bouncetime=300)
     breath_count = 0
 
-    while (not button_pressed) and (GPIO.input(onoff_pin) != GPIO.HIGH):
+    while GPIO.input(offld_pin) == GPIO.LOW:
         breath_count += 1
         # print('starting while loop. button_pressed: {}'.format(button_pressed))
         lcd_message(lcd, 'Breath: {}'.format(breath_count))
         print('breath in')
-        for i in range(0, 101):
-            r_val = 100 - map(i, 0, 100, r1/255*100, r0/255*100)
-            g_val = 100 - map(i, 0, 100, g1/255*100, g0/255*100)
-            b_val = 100 - map(i, 0, 100, b1/255*100, b0/255*100)
+        for i in range(0, 100):  # only goes for 99% of the in breath
+            r_val = map(ramp[i], 0, 100, r1/255*100, r0/255*100)
+            g_val = map(ramp[i], 0, 100, g1/255*100, g0/255*100)
+            b_val = map(ramp[i], 0, 100, b1/255*100, b0/255*100)
             set_color(r_val, g_val, b_val)
             time.sleep(0.01*in_breath_time)
 
+        # little flicker at the top for 1% of the in breath
+        set_color(0,0,0)
+        time.sleep(0.01*in_breath_time)
+            
         print('breath out')
         for i in range(100, 0, -1):
-            r_val = 100 - map(i, 0, 100, r1/255*100, r0/255*100)
-            g_val = 100 - map(i, 0, 100, g1/255*100, g0/255*100)
-            b_val = 100 - map(i, 0, 100, b1/255*100, b0/255*100)
+            r_val = map(ramp[i], 0, 100, r1/255*100, r0/255*100)
+            g_val = map(ramp[i], 0, 100, g1/255*100, g0/255*100)
+            b_val = map(ramp[i], 0, 100, b1/255*100, b0/255*100)
             set_color(r_val, g_val, b_val)
             time.sleep(0.01*out_breath_time)
 
@@ -319,8 +330,11 @@ breathing_led_pins = {'pin_R':33, 'pin_G':35, 'pin_B':37}
 minutes = 60
 button_pin = 22
 
-onoff_pin = 31
-lwld_pin = 40
+#onoff_pin = 31
+#lwld_pin = 40
+
+offlw_pin = 31
+offld_pin = 40
 
 ####################################################
 if __name__ == '__main__':
@@ -331,15 +345,16 @@ if __name__ == '__main__':
     lcd.begin(16, 2)
     button_pressed = False
 
-    while GPIO.input(onoff_pin) == GPIO.HIGH:  # means switch is in DOWN position and current is not flowing
+    while GPIO.input(offlw_pin) == GPIO.HIGH and GPIO.input(offld_pin) == GPIO.HIGH:
+        # means switch is in MIDDLE position and current is not flowing
         print('Breadboard is off!')
         lcd_message(lcd, 'Breadboard off.')
         time.sleep(1)
 
     print('Breadboard is on!')
 
-    # mode is LW if switch is in DOWN position and LD if in UP position
-    mode = 'LW' if GPIO.input(lwld_pin) == GPIO.HIGH else 'LD'
+    # mode is LW if switch is connecting offlw_pin and LD otherwise
+    mode = 'LW' if GPIO.input(offlw_pin) == GPIO.LOW else 'LD'
     startup_lcd(mode)
 
     if mode == 'LW':
@@ -348,7 +363,7 @@ if __name__ == '__main__':
         ld(GPIO)
 
     # wait for breadboard to be shut off to end program
-    while GPIO.input(onoff_pin) == GPIO.LOW:
+    while GPIO.input(offlw_pin) == GPIO.LOW or GPIO.input(offld_pin) == GPIO.LOW:
         time.sleep(1)
 
     # shut things down
