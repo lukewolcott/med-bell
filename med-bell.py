@@ -9,7 +9,7 @@ from time import sleep, strftime
 from datetime import datetime, timedelta
 import time
 import RPi.GPIO as GPIO
-
+import numpy as np
 ######################################################
 # function definitions
 
