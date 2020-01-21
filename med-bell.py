@@ -10,6 +10,8 @@ from datetime import datetime, timedelta
 import time
 import RPi.GPIO as GPIO
 import numpy as np
+from pulsesensor_mb import Pulsesensor
+import smbus
 ######################################################
 # function definitions
 
@@ -78,7 +80,7 @@ def startup_lcd(mode):
 def lcd_message(lcd, message):
     lcd.setCursor(0, 0)
     lcd.message(message)
-    print(message)
+    #print(message)
 
 
 def show_time_left(lcd, c):
@@ -152,6 +154,17 @@ def hit_ccw(start_angle, hit_angle, in_sleeptime, out_sleeptime):
         time.sleep(out_sleeptime)
 
 
+# swings clockwise once, and retracts 
+def hit_cw(start_angle, hit_angle, end_angle, in_sleeptime, out_sleeptime):
+    print('Swinging CCW...')
+    for dc in range (start_angle, hit_angle, -1):
+        servo_write(dc)
+        time.sleep(in_sleeptime)
+    for dc in range(hit_angle, end_angle, 1):
+        servo_write(dc)
+        time.sleep(out_sleeptime)
+
+
 def button_event(channel):
     global button_pressed
     print('button event GPIO{}'.format(channel))
@@ -192,26 +205,30 @@ def set_recording_state(text):
 
 # DO THIS FOR LW
 def lw(GPIO):#, button_pressed):
+    minutes=60
     global button_pressed
     start_time = datetime.now()
     
     # start with some time on the clock
-    starting_buffer_time = 0.1*minutes
+    starting_buffer_time = 0.1*minutes + 30*minutes
+    print('starting buffer time: {}'.format(starting_buffer_time))
     done_time = start_time + timedelta(seconds=starting_buffer_time)
+    print('start time: {}'.format(start_time))
+    print('done time:  {}'.format(done_time))
     reset_prediction()
     set_recording_state('on')
 
-    GPIO.add_event_detect(button_pin, GPIO.FALLING, callback=button_event, bouncetime=300)
-    while done_time > datetime.now():
-        if button_pressed:
-            done_time = done_time + timedelta(minutes=0.1)
-            button_pressed = False
+    #GPIO.add_event_detect(button_pin, GPIO.FALLING, callback=button_event, bouncetime=300)
+    while done_time > datetime.now() and GPIO.input(offlw_pin) == GPIO.LOW:
+        #if button_pressed:
+        #    done_time = done_time + timedelta(minutes=0.1)
+        #    button_pressed = False
 
         file = open('current-prediction.txt')
         prediction = file.read().replace('\n', '')
         file.close()
 
-        print(prediction)
+        #print(prediction)
         if prediction == 'enough':
             lcd_message(lcd, 'Hitting gong...')
             reset_prediction()
@@ -229,8 +246,9 @@ def lw(GPIO):#, button_pressed):
     set_recording_state('off')
 
     # hit the gong
-    hit_ccw(90, 160, 0.002, 0.002)
+    hit_cw(70, 55, 70, 0.01, 0.01)
     destroy_servo()
+    lcd.clear()
 
 
 def f_factory(i, interval):
@@ -261,19 +279,52 @@ def compile_ramp(list_of_vertices):
     return ramp
 
 
+def detect_darkness(bus):
+    address = 0x48	#default address of PCF8591
+    #bus=smbus.SMBus(1)
+    cmd=0x40
+    channel = 2
+    darkness_threshold = 200
+    value = bus.read_byte_data(address,cmd+channel) # for some reason first reading is bad
+    value = bus.read_byte_data(address,cmd+channel)
+    #value = bus.read_byte_data(address,cmd+channel)
+    #value = bus.read_byte_data(address,cmd+channel)
+    #value = bus.read_byte_data(address,cmd+channel)
+        
+    #bus.close()
+    print('darkness value: {}'.format(value))
+    dark = True if value > darkness_threshold else False
+    print('dark: {}'.format(dark))
+    return dark
+
+
+def set_multicolors_and_ramp(bus):
+    dark = detect_darkness(bus)
+    if dark:  # it's dark
+        r0, g0, b0 = 119*1.5, 0, 135*1.5
+        r1, g1, b1 = 0, 0, 0
+        list_of_vertices = [[0,0], [40,10],  [70,50], [100,100]]
+    else:  # it's bright
+        r0, g0, b0 = 0, 0, 255
+        r1, g1, b1 = 255, 0, 10
+        list_of_vertices = [[0,0], [25,25], [50,50], [100,100]]
+    ramp = compile_ramp(list_of_vertices)
+    return r0, g0, b0, r1, g1, b1, ramp, dark
+
+
 # DO THIS FOR LD
-def ld(GPIO):
+def ld(GPIO,  bus):
     global button_pressed
     p_R.start(0)
     p_G.start(0)
     p_B.start(0)
-    r0, g0, b0 = 119, 0, 135 #119, 0, 135
-    r1, g1, b1 = 0,0,0 #255
-    in_breath_time = 2 #5
-    out_breath_time = 2 #7
+    r0, g0, b0, r1, g1, b1, ramp, dark = set_multicolors_and_ramp(bus)
+    bus.close()
+    in_breath_time = 5
+    out_breath_time = 7
 
-    list_of_vertices = [[0,0], [50,20], [80,50], [100,100]]
-    ramp = compile_ramp(list_of_vertices)
+    pulse = Pulsesensor(f=None, channel = 0)
+    pulse.startAsyncBPM()
 
     GPIO.add_event_detect(button_pin, GPIO.FALLING, callback=button_event, bouncetime=300)
     breath_count = 0
@@ -281,26 +332,51 @@ def ld(GPIO):
     while GPIO.input(offld_pin) == GPIO.LOW:
         breath_count += 1
         # print('starting while loop. button_pressed: {}'.format(button_pressed))
-        lcd_message(lcd, 'Breath: {}'.format(breath_count))
+        #lcd_message(lcd, 'Breath: {:<4} in '.format(breath_count))
+        #set_color(0,0,0)
+        #time.sleep(0.01*in_breath_time)
+
+        breath_start_time = time.time()
         print('breath in')
-        for i in range(0, 100):  # only goes for 99% of the in breath
+        elapsed = (time.time()-breath_start_time)
+        while elapsed < in_breath_time:
+        #for i in range(0, 100):  # only goes for 99% of the in breath
+            i = int((elapsed)*100/in_breath_time)
             r_val = map(ramp[i], 0, 100, r1/255*100, r0/255*100)
             g_val = map(ramp[i], 0, 100, g1/255*100, g0/255*100)
             b_val = map(ramp[i], 0, 100, b1/255*100, b0/255*100)
             set_color(r_val, g_val, b_val)
-            time.sleep(0.01*in_breath_time)
-
+            bpm = int(round(pulse.BPM,0)) if pulse.BPM > 0 else 'none'
+            lcd_message(lcd, 'Breath: {:<3}in {:>2}\nBPM: {:<4}' \
+                        .format(breath_count, int(elapsed)+1, bpm))
+            time.sleep(0.005*in_breath_time)
+            elapsed = (time.time()-breath_start_time)
+            
         # little flicker at the top for 1% of the in breath
         set_color(0,0,0)
-        time.sleep(0.01*in_breath_time)
+        time.sleep(0.005*in_breath_time)
             
         print('breath out')
-        for i in range(100, 0, -1):
+        #lcd_message(lcd, 'Breath: {:<4} out'.format(breath_count))
+        while elapsed < in_breath_time + out_breath_time:
+        #for i in range(100, 0, -1):
+            i = 100-int((elapsed-in_breath_time)*100/out_breath_time)
             r_val = map(ramp[i], 0, 100, r1/255*100, r0/255*100)
             g_val = map(ramp[i], 0, 100, g1/255*100, g0/255*100)
             b_val = map(ramp[i], 0, 100, b1/255*100, b0/255*100)
             set_color(r_val, g_val, b_val)
-            time.sleep(0.01*out_breath_time)
+            bpm = int(round(pulse.BPM,0)) if pulse.BPM > 0 else 'none'
+            lcd_message(lcd, 'Breath: {:<3}out{:>2}\nBPM: {:<4}' \
+                        .format(breath_count, int(elapsed-in_breath_time)+1, bpm))
+            time.sleep(0.005*out_breath_time)
+            elapsed = (time.time()-breath_start_time)
+
+        if not dark:
+            set_color(0,0,0)
+            time.sleep(0.005*out_breath_time)
+
+    # turn off pulse sensor
+    pulse.stopAsyncBPM()
 
 #        for i in range(0, 101):
 #            r_val=100 - map(r*i/100, 0, 255, 0, 100)
@@ -357,13 +433,13 @@ button_pin = 22
 #onoff_pin = 31
 #lwld_pin = 40
 
-offlw_pin = 31
-offld_pin = 40
+offlw_pin = 40 #38
+offld_pin = 38 #40
 
 ####################################################
 if __name__ == '__main__':
     print('Program is starting ... ')
-    time.sleep(3)
+    #time.sleep(3)
     setup_gpio()
     mcp.output(3, 1)
     lcd.begin(16, 2)
@@ -372,9 +448,10 @@ if __name__ == '__main__':
     while GPIO.input(offlw_pin) == GPIO.HIGH and GPIO.input(offld_pin) == GPIO.HIGH:
         # means switch is in MIDDLE position and current is not flowing
         print('Breadboard is off!')
-        lcd_message(lcd, 'Breadboard off.')
+        lcd_message(lcd, '* MedBell 2020 *')
         time.sleep(1)
 
+    lcd.clear()
     print('Breadboard is on!')
 
     # mode is LW if switch is connecting offlw_pin and LD otherwise
@@ -384,7 +461,8 @@ if __name__ == '__main__':
     if mode == 'LW':
         lw(GPIO)
     elif mode == 'LD':
-        ld(GPIO)
+        bus = smbus.SMBus(1)
+        ld(GPIO, bus)
 
     # wait for breadboard to be shut off to end program
     while GPIO.input(offlw_pin) == GPIO.LOW or GPIO.input(offld_pin) == GPIO.LOW:
