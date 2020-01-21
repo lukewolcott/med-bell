@@ -15,53 +15,7 @@ import smbus
 ######################################################
 # function definitions
 
-# get CPU temperature and store it into file "/sys/class/thermal/thermal_zone0/temp"
-# TODO: remove
-def get_cpu_temp():
-    tmp = open('/sys/class/thermal/thermal_zone0/temp')
-    cpu = tmp.read()
-    tmp.close()
-    return '{:.2f}'.format( float(cpu)/1000 ) + ' C'
-
-# get system time
-# TODO: remove
-def get_time_now():     
-    return datetime.now().strftime('    %H:%M:%S')
-    
-# TODO: remove
-def freenove_loop():
-    mcp.output(3,1)     # turn on LCD backlight
-    lcd.begin(16,2)     # set number of LCD lines and columns
-    while(True):         
-        #lcd.clear()
-        lcd.setCursor(0,0)  # set cursor position
-        lcd.message( 'CPU: ' + get_cpu_temp()+'\n' )# display CPU temperature
-        lcd.message( get_time_now() )   # display the time
-        sleep(1)
-
-# TODO: remove
-def count_down(count_from):
-    c = count_from
-    while c > 0:
-        mins = int(c/60)
-        secs = c%60
-        lcd_message(lcd, 'Time: {:0>2}m {:0>2}sec'.format(mins, secs))
-        c -= 1
-        sleep(1)
-    lcd.clear()
-
-# TODO: remove
-def Freenove_buttonEvent(channel):
-    global ledState
-    print ('buttonEvent GPIO%d' %channel)
-    ledState = not ledState
-    if ledState :
-        print ('Turn on LED ... ')
-    else :
-        print ('Turn off LED ... ')
-    GPIO.output(ledPin,ledState)
-############################################################
-
+# starts up LCD
 def startup_lcd(mode):
     mcp.output(3, 1)
     lcd.begin(16, 2)
@@ -76,20 +30,20 @@ def startup_lcd(mode):
     sleep(3)
     lcd.clear()
 
-
+# displays message on LCD
 def lcd_message(lcd, message):
     lcd.setCursor(0, 0)
     lcd.message(message)
     #print(message)
 
-
+# displays time remaining on LCD
 def show_time_left(lcd, c):
     mins = int(c/60)
     secs = int(c%60)
     lcd_message(lcd, 'Time: {:0>2}m {:0>2}sec'.format(mins, secs))
     # print('Time: {:0>2}m {:0>2}sec'.format(mins, secs))
 
-
+# turns off LCD
 def destroy_lcd():
     lcd.clear()
     print('destroying lcd...')
@@ -101,11 +55,11 @@ def pause_indefinitely():
     while True:
         time.sleep(99)
 
-
+# helper function for LED pulsing
 def map(value, fromLow, fromHigh, toLow, toHigh):
     return (toHigh-toLow)*(value-fromLow) / (fromHigh-fromLow) + toLow
 
-
+# set up GPIO
 def setup_gpio():
     global p
     global p_R, p_G, p_B
@@ -124,14 +78,14 @@ def setup_gpio():
     GPIO.setup(offlw_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
     GPIO.setup(offld_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
-    # set up breathing led pins
+    # set up breathing led pins. setting to low turns them off to start.
     for i in breathing_led_pins:
         GPIO.setup(breathing_led_pins[i], GPIO.OUT)
-        GPIO.output(breathing_led_pins[i], GPIO.LOW)  # Set pins to high(+3.3V) to off led
-    p_R = GPIO.PWM(breathing_led_pins['pin_R'], 2000)  # set Frequece to 2KHz
+        GPIO.output(breathing_led_pins[i], GPIO.LOW)
+    # set frequency to 2000
+    p_R = GPIO.PWM(breathing_led_pins['pin_R'], 2000)  
     p_G = GPIO.PWM(breathing_led_pins['pin_G'], 2000)
     p_B = GPIO.PWM(breathing_led_pins['pin_B'], 2000)
-
 
 # make the servo rotate to specific angle (0-180 degrees) 
 def servo_write(angle):
@@ -142,7 +96,6 @@ def servo_write(angle):
     # map the angle to duty cycle and output it
     p.ChangeDutyCycle(map(angle, 0, 180, SERVO_MIN_DUTY, SERVO_MAX_DUTY))
     
-
 # swings counter-clockwise once, and retracts 
 def hit_ccw(start_angle, hit_angle, in_sleeptime, out_sleeptime):
     print('Swinging CCW...')
@@ -152,7 +105,6 @@ def hit_ccw(start_angle, hit_angle, in_sleeptime, out_sleeptime):
     for dc in range(hit_angle, start_angle, -1):
         servo_write(dc)
         time.sleep(out_sleeptime)
-
 
 # swings clockwise once, and retracts 
 def hit_cw(start_angle, hit_angle, end_angle, in_sleeptime, out_sleeptime):
@@ -164,7 +116,7 @@ def hit_cw(start_angle, hit_angle, end_angle, in_sleeptime, out_sleeptime):
         servo_write(dc)
         time.sleep(out_sleeptime)
 
-
+# helper function for detecting a button press (if button exists)
 def button_event(channel):
     global button_pressed
     print('button event GPIO{}'.format(channel))
@@ -177,11 +129,9 @@ def set_color(r_val, g_val, b_val):
     p_G.ChangeDutyCycle(g_val)
     p_B.ChangeDutyCycle(b_val)
 
-
 # shut down connection to servo pin
 def destroy_servo():
     p.stop()
-
 
 # shut down the connection to GPIO
 def destroy_pwm_and_gpio():
@@ -190,13 +140,13 @@ def destroy_pwm_and_gpio():
     p_B.stop()
     GPIO.cleanup()
 
-
+# set current prediction to empty
 def reset_prediction():
     file = open('current-prediction.txt', 'w')
     file.write('empty')
     file.close()
 
-
+# set recording state to on or off
 def set_recording_state(text):
     file = open('current-recording-state.txt', 'w')
     file.write(text)
@@ -204,9 +154,9 @@ def set_recording_state(text):
 
 
 # DO THIS FOR LW
-def lw(GPIO):#, button_pressed):
+def lw(GPIO):
     minutes=60
-    global button_pressed
+    #global button_pressed
     start_time = datetime.now()
     
     # start with some time on the clock
@@ -218,7 +168,10 @@ def lw(GPIO):#, button_pressed):
     reset_prediction()
     set_recording_state('on')
 
-    #GPIO.add_event_detect(button_pin, GPIO.FALLING, callback=button_event, bouncetime=300)
+    #GPIO.add_event_detect(button_pin, GPIO.FALLING,
+    #                      callback=button_event, bouncetime=300)
+
+    # repeat until time is up or switch is turned to middle
     while done_time > datetime.now() and GPIO.input(offlw_pin) == GPIO.LOW:
         #if button_pressed:
         #    done_time = done_time + timedelta(minutes=0.1)
@@ -235,7 +188,7 @@ def lw(GPIO):#, button_pressed):
             time.sleep(3)
             break
         if prediction == 'not_enough':
-            done_time = done_time + timedelta(minutes=0.2)
+            done_time = done_time + timedelta(minutes=0.2) # change to 15
             lcd_message(lcd, 'Adding time...')
             reset_prediction()
             time.sleep(3)
@@ -250,7 +203,7 @@ def lw(GPIO):#, button_pressed):
     destroy_servo()
     lcd.clear()
 
-
+# helper function for compile_ramp
 def f_factory(i, interval):
     start_point, end_point = interval
     slope = (end_point[1] - start_point[1])/(end_point[0] - start_point[0])
@@ -258,7 +211,7 @@ def f_factory(i, interval):
         return slope*(x  -  start_point[0]) + start_point[1]
     return f
 
-
+# takes a list of vertices and makes a piecewise linear function
 def compile_ramp(list_of_vertices):
     num_vertices = len(list_of_vertices)
     num_lines = num_vertices - 1
@@ -278,26 +231,23 @@ def compile_ramp(list_of_vertices):
         ramp[i] = functions[fn_assignments[i]](i)
     return ramp
 
-
+# use photoresistor to check if it is light or dark
 def detect_darkness(bus):
     address = 0x48	#default address of PCF8591
-    #bus=smbus.SMBus(1)
     cmd=0x40
     channel = 2
     darkness_threshold = 200
-    value = bus.read_byte_data(address,cmd+channel) # for some reason first reading is bad
+
+    # for some reason first reading is bad
     value = bus.read_byte_data(address,cmd+channel)
-    #value = bus.read_byte_data(address,cmd+channel)
-    #value = bus.read_byte_data(address,cmd+channel)
-    #value = bus.read_byte_data(address,cmd+channel)
+    value = bus.read_byte_data(address,cmd+channel)
         
-    #bus.close()
     print('darkness value: {}'.format(value))
     dark = True if value > darkness_threshold else False
     print('dark: {}'.format(dark))
     return dark
 
-
+# defines the pulsing colors function
 def set_multicolors_and_ramp(bus):
     dark = detect_darkness(bus)
     if dark:  # it's dark
@@ -326,12 +276,12 @@ def ld(GPIO,  bus):
     pulse = Pulsesensor(f=None, channel = 0)
     pulse.startAsyncBPM()
 
-    GPIO.add_event_detect(button_pin, GPIO.FALLING, callback=button_event, bouncetime=300)
+    #GPIO.add_event_detect(button_pin, GPIO.FALLING,
+    #                      callback=button_event, bouncetime=300)
     breath_count = 0
 
     while GPIO.input(offld_pin) == GPIO.LOW:
         breath_count += 1
-        # print('starting while loop. button_pressed: {}'.format(button_pressed))
         #lcd_message(lcd, 'Breath: {:<4} in '.format(breath_count))
         #set_color(0,0,0)
         #time.sleep(0.01*in_breath_time)
@@ -340,7 +290,6 @@ def ld(GPIO,  bus):
         print('breath in')
         elapsed = (time.time()-breath_start_time)
         while elapsed < in_breath_time:
-        #for i in range(0, 100):  # only goes for 99% of the in breath
             i = int((elapsed)*100/in_breath_time)
             r_val = map(ramp[i], 0, 100, r1/255*100, r0/255*100)
             g_val = map(ramp[i], 0, 100, g1/255*100, g0/255*100)
@@ -352,14 +301,13 @@ def ld(GPIO,  bus):
             time.sleep(0.005*in_breath_time)
             elapsed = (time.time()-breath_start_time)
             
-        # little flicker at the top for 1% of the in breath
+        # little flicker at the top of the in breath
         set_color(0,0,0)
         time.sleep(0.005*in_breath_time)
             
         print('breath out')
         #lcd_message(lcd, 'Breath: {:<4} out'.format(breath_count))
         while elapsed < in_breath_time + out_breath_time:
-        #for i in range(100, 0, -1):
             i = 100-int((elapsed-in_breath_time)*100/out_breath_time)
             r_val = map(ramp[i], 0, 100, r1/255*100, r0/255*100)
             g_val = map(ramp[i], 0, 100, g1/255*100, g0/255*100)
@@ -367,7 +315,8 @@ def ld(GPIO,  bus):
             set_color(r_val, g_val, b_val)
             bpm = int(round(pulse.BPM,0)) if pulse.BPM > 0 else 'none'
             lcd_message(lcd, 'Breath: {:<3}out{:>2}\nBPM: {:<4}' \
-                        .format(breath_count, int(elapsed-in_breath_time)+1, bpm))
+                        .format(breath_count, int(elapsed-in_breath_time)+1,
+                                bpm))
             time.sleep(0.005*out_breath_time)
             elapsed = (time.time()-breath_start_time)
 
@@ -377,23 +326,6 @@ def ld(GPIO,  bus):
 
     # turn off pulse sensor
     pulse.stopAsyncBPM()
-
-#        for i in range(0, 101):
-#            r_val=100 - map(r*i/100, 0, 255, 0, 100)
-#            g_val=100 - map(g*i/100, 0, 255, 0, 100)
-#            b_val=100 - map(b*i/100, 0, 255, 0, 100)
-#            set_color(r_val, g_val, b_val)
-#            time.sleep(0.01*in_breath_time)
-#
-#        print('breath out')
-#        for i in range(100, 0, -1):
-#            r_val=100 - map(r*i/100, 0, 255, 0, 100)
-#            g_val=100 - map(g*i/100, 0, 255, 0, 100)
-#            b_val=100 - map(b*i/100, 0, 255, 0, 100)
-#            set_color(r_val, g_val, b_val)
-#            time.sleep(0.01*out_breath_time)
-
-    # TODO: add code that  will show heart rate
 
 
 ######################################################
@@ -471,15 +403,10 @@ if __name__ == '__main__':
     # shut things down
     destroy_lcd()
     destroy_pwm_and_gpio()
-#    from subprocess import call
-#    print('shutting down...')
-#    call("sudo shutdown -h now", shell=True)
-    #exit(0)
 
-#    # just wait for keyboard interrupt then shut things down
-#    try:
-#        pause_indefinitely()
-#    except KeyboardInterrupt:
-#        destroy_lcd()
-#        destroy_pwm_and_gpio()
+    from subprocess import call
+    print('shutting down...')
+    call("sudo shutdown -h now", shell=True)
+    exit(0)
+
 
