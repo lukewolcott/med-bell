@@ -208,7 +208,7 @@ def insert_audio_clip(background, audio_clip, previous_segments):
     return new_background, segment_time
 
 
-def make_training_sample(backgrounds, samples_to_add, label):
+def make_training_sample(backgrounds, samples_to_add, label, literal, i):
     """
     generate a training sample, in the form of a numpy array from the spectrogram, 
     and a multiclass label
@@ -218,29 +218,43 @@ def make_training_sample(backgrounds, samples_to_add, label):
     samples_to_add -- list of samples to add, one of: enoughs, notenoughs, empties.  
     from load_raw_audio
     label -- string label to assign this sample, one of: 'enough', 'not_enough', 'empty'
-    
+    literal -- if these are literal samples and should not be randomized or layered on backgrounds
+    i -- index of sample, for literal case
+
     returns:
     x -- numpy array of training sample spectrogram
     y -- label
     """
 
-    sample_idx = np.random.randint(len(samples_to_add))
-    bkgnd_idx = np.random.randint(len(backgrounds))
+    if not literal:
+        sample_idx = np.random.randint(len(samples_to_add))
+        bkgnd_idx = np.random.randint(len(backgrounds))
 
-    sample_to_add = samples_to_add[sample_idx]
-    background = backgrounds[bkgnd_idx]
+        sample_to_add = samples_to_add[sample_idx]
+        background = backgrounds[bkgnd_idx]
     
-    # make background quieter
-    background = background - 20
+        # make background quieter
+        # TODO: maybe remove this?
+        #background = background - 20
 
-    previous_segments = []
+        previous_segments = []
 
-    if (label == 'empty') and (np.random.uniform() < 0.8):
-        # if label is empty, 80% chance we don't put in an empty clip
-        background = background
-        sample_idx = -1
+        if (label == 'empty') and (np.random.uniform() < 0.8):
+            # if label is empty, 80% chance we don't put in an empty clip
+            background = background
+            sample_idx = -1
+        else:
+            background, segment_time = insert_audio_clip(background, sample_to_add, previous_segments)
     else:
-        background, segment_time = insert_audio_clip(background, sample_to_add, previous_segments)
+        sample_idx = i
+        bkgnd_idx = -1
+        sample_to_add = samples_to_add[sample_idx]  # for literals just go sequentially not randomly
+        
+        # same preprocessing done in preprocess_runtime_clip
+        background = AudioSegment.silent(duration=5000)
+        background = background.overlay(sample_to_add)
+
+    background = background.set_frame_rate(44100)  # shouldn't actually be necessary
 
     y = label
 
@@ -252,7 +266,7 @@ def make_training_sample(backgrounds, samples_to_add, label):
     return x, y, sample_idx, bkgnd_idx
 
 # make a set of training samples with the same label
-def make_training_samples(backgrounds, samples_to_add, label, n_samples, Tx, n_freq, Ty):
+def make_training_samples(backgrounds, samples_to_add, label, n_samples, Tx, n_freq, Ty, literal):
     if label not in ['enough', 'not_enough', 'empty']:
         print('Label must be one of: enough, not_enough, empty.')
         return 0
@@ -264,7 +278,7 @@ def make_training_samples(backgrounds, samples_to_add, label, n_samples, Tx, n_f
     print('sample: ', end='')
     for i in range(n_samples):
         print(' {}'.format(i), end='')
-        x, y, sample_idx, bkgnd_idx = make_training_sample(backgrounds, samples_to_add, label)
+        x, y, sample_idx, bkgnd_idx = make_training_sample(backgrounds, samples_to_add, label, literal, i)
         X[i] = x.transpose()
         Y.append(y)
         sample_indices[i] = sample_idx
@@ -280,11 +294,11 @@ def make_training_samples(backgrounds, samples_to_add, label, n_samples, Tx, n_f
     return X, Y
 
 def make_features_and_labels(n_enoughs, n_notenoughs, n_empties,
-                             enoughs, notenoughs, empties, backgrounds, Tx, n_freq, Ty):
-    X_en, y_en = make_training_samples(backgrounds, enoughs, 'enough', n_enoughs, Tx, n_freq, Ty)
+                             enoughs, notenoughs, empties, backgrounds, Tx, n_freq, Ty, literal=False):
+    X_en, y_en = make_training_samples(backgrounds, enoughs, 'enough', n_enoughs, Tx, n_freq, Ty, literal)
     X_nen, y_nen  = make_training_samples(backgrounds, notenoughs, 'not_enough',
-                                          n_notenoughs, Tx, n_freq, Ty) 
-    X_emp, y_emp  = make_training_samples(backgrounds, empties, 'empty', n_empties, Tx, n_freq, Ty)
+                                          n_notenoughs, Tx, n_freq, Ty, literal) 
+    X_emp, y_emp  = make_training_samples(backgrounds, empties, 'empty', n_empties, Tx, n_freq, Ty, literal)
 
     # combine into one feature dataset and label dataset
     X = np.concatenate([X_en, X_nen, X_emp])
@@ -321,8 +335,10 @@ def preprocess_runtime_clip(filename, background_filepath=None):
         padding = AudioSegment.silent(duration=5000)
     segment = AudioSegment.from_wav(filename)[:5000]
     segment = padding.overlay(segment)
-    segment = segment.set_frame_rate(44100)
-        
+    segment = segment.set_frame_rate(44100)  
+
+    segment = match_target_amplitude(segment, -20.0)
+    
     # Export as wav
     segment.export('runtime_temp.wav', format='wav')
 
@@ -337,7 +353,8 @@ def run_model_on_clip(model, clip_filename='runtime_temp.wav'):
 def record_and_process_5_seconds(idx, samp_rate, chunk, record_secs, stream,chans,
                                  form_1, audio, model):
     #print("recording {}".format(idx))
-    print('Clip start: {}...'.format(datetime.now().strftime("%m/%d/%Y %H:%M:%S")), end='')
+    now = datetime.now().strftime("%m/%d/%Y %H:%M:%S")
+    print('Clip start: {}...'.format(now), end='')
     frames = []
 
     # loop through stream and append audio chunks to frame array
@@ -363,7 +380,7 @@ def record_and_process_5_seconds(idx, samp_rate, chunk, record_secs, stream,chan
     pred, preds = run_model_on_clip(model, 'runtime_temp.wav')
     preds_nice = ', '.join(['{:.4f}'.format(p) for p in preds[0]])
     print('   prediction: {}.   [{}]'.format(pred, preds_nice))
-    return pred
+    return pred, preds, now
     
     
 # randomly put 80% of original background clips into train, and 20% into val
