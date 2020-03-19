@@ -244,11 +244,13 @@ def make_training_sample(backgrounds, samples_to_add, label, literal, i):
             background = background
             sample_idx = -1
         else:
-            background, segment_time = insert_audio_clip(background, sample_to_add, previous_segments)
+            background, segment_time = insert_audio_clip(background, sample_to_add,
+                                                         previous_segments)
     else:
         sample_idx = i
         bkgnd_idx = -1
-        sample_to_add = samples_to_add[sample_idx]  # for literals just go sequentially not randomly
+        # for literals just go sequentially not randomly
+        sample_to_add = samples_to_add[sample_idx]  
         
         # same preprocessing done in preprocess_runtime_clip
         background = AudioSegment.silent(duration=5000)
@@ -266,7 +268,8 @@ def make_training_sample(backgrounds, samples_to_add, label, literal, i):
     return x, y, sample_idx, bkgnd_idx
 
 # make a set of training samples with the same label
-def make_training_samples(backgrounds, samples_to_add, label, n_samples, Tx, n_freq, Ty, literal):
+def make_training_samples(backgrounds, samples_to_add, label, n_samples, Tx,
+                          n_freq, Ty, literal):
     if label not in ['enough', 'not_enough', 'empty']:
         print('Label must be one of: enough, not_enough, empty.')
         return 0
@@ -278,7 +281,8 @@ def make_training_samples(backgrounds, samples_to_add, label, n_samples, Tx, n_f
     print('sample: ', end='')
     for i in range(n_samples):
         print(' {}'.format(i), end='')
-        x, y, sample_idx, bkgnd_idx = make_training_sample(backgrounds, samples_to_add, label, literal, i)
+        x, y, sample_idx, bkgnd_idx = make_training_sample(backgrounds, samples_to_add,
+                                                           label, literal, i)
         X[i] = x.transpose()
         Y.append(y)
         sample_indices[i] = sample_idx
@@ -294,11 +298,14 @@ def make_training_samples(backgrounds, samples_to_add, label, n_samples, Tx, n_f
     return X, Y
 
 def make_features_and_labels(n_enoughs, n_notenoughs, n_empties,
-                             enoughs, notenoughs, empties, backgrounds, Tx, n_freq, Ty, literal=False):
-    X_en, y_en = make_training_samples(backgrounds, enoughs, 'enough', n_enoughs, Tx, n_freq, Ty, literal)
+                             enoughs, notenoughs, empties, backgrounds,
+                             Tx, n_freq, Ty, literal=False):
+    X_en, y_en = make_training_samples(backgrounds, enoughs, 'enough',
+                                       n_enoughs, Tx, n_freq, Ty, literal)
     X_nen, y_nen  = make_training_samples(backgrounds, notenoughs, 'not_enough',
                                           n_notenoughs, Tx, n_freq, Ty, literal) 
-    X_emp, y_emp  = make_training_samples(backgrounds, empties, 'empty', n_empties, Tx, n_freq, Ty, literal)
+    X_emp, y_emp  = make_training_samples(backgrounds, empties, 'empty',
+                                          n_empties, Tx, n_freq, Ty, literal)
 
     # combine into one feature dataset and label dataset
     X = np.concatenate([X_en, X_nen, X_emp])

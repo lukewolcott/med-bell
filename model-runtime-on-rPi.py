@@ -1,9 +1,6 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[1]:
-
-
 import keras
 from pydub import AudioSegment
 from mb_utils import *
@@ -45,19 +42,21 @@ audio = pyaudio.PyAudio()
 print('Starting recording stream...')
 
 # create pyaudio stream
-stream = audio.open(format = form_1,rate = samp_rate,channels = chans,                     input_device_index = dev_index,input = True,                     frames_per_buffer=chunk)
-
-
+stream = audio.open(format = form_1,rate = samp_rate,channels = chans,
+                    input_device_index = dev_index,input = True,
+                    frames_per_buffer=chunk)
 
 # process five seconds at a time and return predictions, until triggered to stop
 print('Recording...')
 while rec_state == 'on':
-    pred = record_and_process_5_seconds(0, samp_rate, chunk, record_secs, stream, chans, 
-                                        form_1, audio, model)
+    pred, preds, now = record_and_process_5_seconds(0, samp_rate, chunk,
+                                                    record_secs, stream, chans, 
+                                                    form_1, audio, model)
+    
+    # TODO: consider collecting predictions rather than writing each
     file = open('current-prediction.txt', 'w')
     file.write(pred)
     file.close()
-    # print('Wrote prediction to current-prediction.txt')
     rec_state = get_recording_state()
 
 # stop the stream, close it, and terminate the pyaudio instantiation

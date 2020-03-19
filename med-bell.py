@@ -168,27 +168,21 @@ def lw(GPIO):
     reset_prediction()
     set_recording_state('on')
 
-    #GPIO.add_event_detect(button_pin, GPIO.FALLING,
-    #                      callback=button_event, bouncetime=300)
-
     # repeat until time is up or switch is turned to middle
     while done_time > datetime.now() and GPIO.input(offlw_pin) == GPIO.LOW:
-        #if button_pressed:
-        #    done_time = done_time + timedelta(minutes=0.1)
-        #    button_pressed = False
 
+        # get current prediction
         file = open('current-prediction.txt')
         prediction = file.read().replace('\n', '')
         file.close()
 
-        #print(prediction)
         if prediction == 'enough':
             lcd_message(lcd, 'Hitting gong...')
             reset_prediction()
             time.sleep(3)
             break
         if prediction == 'not_enough':
-            done_time = done_time + timedelta(minutes=0.2) # change to 15
+            done_time = done_time + timedelta(minutes=15)
             lcd_message(lcd, 'Adding time...')
             reset_prediction()
             time.sleep(3)
@@ -276,8 +270,6 @@ def ld(GPIO,  bus):
     pulse = Pulsesensor(f=None, channel = 0)
     pulse.startAsyncBPM()
 
-    #GPIO.add_event_detect(button_pin, GPIO.FALLING,
-    #                      callback=button_event, bouncetime=300)
     breath_count = 0
 
     while GPIO.input(offld_pin) == GPIO.LOW:
